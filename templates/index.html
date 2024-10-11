@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gesture Recognition</title>
+    <style>
+        video, canvas {
+            display: none;
+        }
+        #output {
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gesture Recognition</h1>
+    <img id="output" src="" alt="Processed Video Feed">
+    <p id="gesture_result">Gesture: </p>
+
+    <script>
+        const video = document.createElement('video');
+        video.setAttribute('autoplay', '');
+        video.setAttribute('playsinline', '');
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        const output = document.getElementById('output');
+        const gestureResult = document.getElementById('gesture_result');
+
+        // Access the camera stream.
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
+                video.srcObject = stream;
+                video.onloadedmetadata = function(e) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    video.play();
+                    processFrame();
+                };
+            });
+        }
+
+        function processFrame() {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataURL = canvas.toDataURL('image/jpeg');
+
+            fetch('/video_feed', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                },
+                body: dataURItoBlob(dataURL),
+            })
+            .then(response => {
+                const gesture = response.headers.get('Gesture') || 'No gesture detected';
+                gestureResult.textContent = 'Gesture: ' + gesture;
+                return response.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                output.src = url;
+                requestAnimationFrame(processFrame);
+            });
+        }
+
+        // Helper function to convert dataURL to Blob.
+        function dataURItoBlob(dataURI) {
+            const byteString = atob(dataURI.split(',')[1]);
+            const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+
+            return new Blob([ab], { type: mimeString });
+        }
+    </script>
+</body>
+</html>
